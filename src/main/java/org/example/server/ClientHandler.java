@@ -5,13 +5,20 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 
+import static java.lang.Thread.sleep;
+
 public class ClientHandler {
     private MyServer myServer;
     private DataInputStream in;
     private DataOutputStream out;
     private Socket socket;
+    private volatile boolean close = false;
+
+    private int connect_timeout_sec = 120;
 
     private String name;
+
+    private volatile boolean isAuthentication = false;
 
     public String getName(){
         return name;
@@ -27,7 +34,9 @@ public class ClientHandler {
             new Thread(() -> {
                 try {
                     authentication();
-                    readMessages();
+                    if (!close) {
+                        readMessages();
+                    }
                 } catch (IOException e){
                     e.printStackTrace();
                 } finally {
@@ -51,6 +60,7 @@ public class ClientHandler {
                         name = nick;
                         myServer.broadcastMsg(name + " is chatting");
                         myServer.subscribe(this);
+                        isAuthentication = true;
                         return;
                     } else {
                         sendMsg("Nick is busy");
@@ -59,8 +69,24 @@ public class ClientHandler {
                     sendMsg("Login or password are wrong");
                 }
             }
+            try {
+                for (int i = 0 ; i < (connect_timeout_sec*4) ; i++) {
+                    sleep(250);
+                    if (isAuthentication){
+                        break;
+                    }
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if (!isAuthentication) {
+                System.out.println("Client does not connected");
+                close = true;
+                return;
+            }
         }
     }
+
 
     private void readMessages() throws IOException {
         while (true){
